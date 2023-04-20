@@ -2,9 +2,9 @@ package main
 
 import (
 	"fmt"
-	"math/big"
-
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
+	"math/big"
 )
 
 var (
@@ -53,7 +53,18 @@ func GeneratePublicKey(secKey *big.Int) *Point {
 }
 
 func (ecc *MyECC) Sign(msg []byte, secKey *big.Int) (*Signature, error) {
-	return nil, nil
+	k, err := newRand()
+	if err != nil {
+		return nil, err
+	}
+	R := Multi(G, k)
+	r := R.X
+	invk := Inv(k, N)
+	z := new(big.Int).SetBytes(crypto.Keccak256(msg))
+	re := new(big.Int).Mul(r, secKey)
+	sum := new(big.Int).Add(z, re)
+	s := new(big.Int).Mul(sum, invk)
+	return &Signature{s, r}, nil
 }
 
 // >>> point = S256Point(px, py)
@@ -62,7 +73,15 @@ func (ecc *MyECC) Sign(msg []byte, secKey *big.Int) (*Signature, error) {
 // >>> v = r * s_inv % N  ❸
 // >>> print((u*G + v*point).x.num == r)
 func (ecc *MyECC) VerifySignature(msg []byte, signature *Signature, pubkey *Point) bool {
-	return true
+	z := new(big.Int).SetBytes(crypto.Keccak256(msg))
+	u := new(big.Int).Mul(z, Inv(signature.s, N))
+	u.Mod(u, N)
+	v := new(big.Int).Mul(signature.r, Inv(signature.s, N))
+	v.Mod(v, N)
+	uG := Multi(G, u)
+	vP := Multi(pubkey, v)
+	R := Add(uG, vP)
+	return R.X.Cmp(signature.r) == 0
 }
 
 func main() {
