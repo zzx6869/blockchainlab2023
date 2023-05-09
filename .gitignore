@@ -4,6 +4,9 @@
 *.dll
 *.so
 *.dylib
+*.bak
+*.pdf
+*.sum
 .DS_Store
 
 # Test binary, built with `go test -c`
@@ -14,6 +17,7 @@
 
 .idea/
 target/
+.vscode/
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
