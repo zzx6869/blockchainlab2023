@@ -36,7 +36,11 @@ func NewUTXOTransaction(from, to []byte, amount int, UTXOSet *UTXOSet) *Transact
 }
 
 func (t *Transaction) IsCoinBase() bool {
-	return true
+	if len(t.Vin[0].Txid) == 0 && t.Vin[0].Vout == -1 && len(t.Vin) == 1 {
+		return true
+	} else {
+		return false
+	}
 }
 
 func (t *Transaction) Serialize() []byte {

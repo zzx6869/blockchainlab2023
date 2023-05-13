@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/gob"
 	"encoding/hex"
+	"github.com/btcsuite/btcutil/base58"
 	"io/ioutil"
 	"log"
 	"os"
@@ -55,7 +56,13 @@ func HashPublicKey(pubKey []byte) []byte {
 }
 
 func (w *Wallet) GetAddress() []byte {
-	return nil
+	publicKeyHash := HashPublicKey(w.PublicKey)
+	versionedPublicKeyHash := append([]byte{version}, publicKeyHash...)
+	checkSum := sha256.Sum256(versionedPublicKeyHash)
+	checkSum = sha256.Sum256(checkSum[:])
+	finalHash := append(versionedPublicKeyHash, checkSum[:checkSumlen]...)
+	address := base58.Encode(finalHash)
+	return []byte(address)
 }
 
 // NewWallets creates Wallets and fills it from a file if it exists
