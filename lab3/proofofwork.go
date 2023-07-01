@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"crypto/sha256"
 	"math"
 	"math/big"
 )
@@ -10,6 +12,22 @@ var (
 )
 
 const targetBits = 8
+
+func (pow *ProofOfWork) prepareData() []byte {
+	data := bytes.Join(
+		[][]byte{
+			IntToHex(pow.block.Header.Version),
+			pow.block.Header.PrevBlockHash[:],
+			pow.block.Header.MerkleRoot[:],
+			IntToHex(pow.block.Header.Timestamp),
+			IntToHex(int64(targetBits)),
+			IntToHex(pow.block.Header.Nonce),
+		},
+		[]byte{},
+	)
+
+	return data
+}
 
 // ProofOfWork represents a proof-of-work
 type ProofOfWork struct {
@@ -31,6 +49,19 @@ func NewProofOfWork(b *Block) *ProofOfWork {
 // implement
 func (pow *ProofOfWork) Run() (int64, []byte) {
 	nonce := int64(0)
+	var hash [32]byte
+	pow.block.SetNonce(nonce)
+	// ⽐较 hash 和 target
+	for nonce < int64(maxNonce) {
+		data := pow.prepareData()
+		hash = sha256.Sum256(data)
+		if new(big.Int).SetBytes(hash[:]).Cmp(pow.target) == -1 {
+			break
+		} else {
+			nonce++
+			pow.block.SetNonce(nonce)
+		}
+	}
 
 	return nonce, nil
 }
@@ -38,5 +69,9 @@ func (pow *ProofOfWork) Run() (int64, []byte) {
 // Validate validates block's PoW
 // implement
 func (pow *ProofOfWork) Validate() bool {
-	return true
+	var hashInt big.Int
+	data := pow.prepareData()
+	hash := sha256.Sum256(data)
+	hashInt.SetBytes(hash[:])
+	return hashInt.Cmp(pow.target) == -1
 }

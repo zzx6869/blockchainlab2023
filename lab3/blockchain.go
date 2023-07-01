@@ -86,8 +86,49 @@ func (bc *Blockchain) VerifyTransaction(tx *Transaction) bool {
 // implement
 // MineBlock mines a new block with the provided transactions
 func (bc *Blockchain) MineBlock(transactions []*Transaction) *Block {
+	var lastHash [32]byte
 
-	return nil
+	for _, tx := range transactions {
+		// TODO: ignore transaction if it's not valid
+		if bc.VerifyTransaction(tx) != true {
+			log.Panic("ERROR: Invalid transaction")
+		}
+	}
+
+	err := bc.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(blocksBucket))
+		hash := b.Get([]byte("l"))
+		copy(lastHash[:], hash)
+
+		return nil
+	})
+	if err != nil {
+		log.Panic(err)
+	}
+
+	newBlock := NewBlock(transactions, lastHash)
+
+	err = bc.db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(blocksBucket))
+		err := b.Put(newBlock.CalCulHash(), newBlock.Serialize())
+		if err != nil {
+			log.Panic(err)
+		}
+
+		err = b.Put([]byte("l"), newBlock.CalCulHash())
+		if err != nil {
+			log.Panic(err)
+		}
+
+		bc.tip = newBlock.CalCulHash()
+
+		return nil
+	})
+	if err != nil {
+		log.Panic(err)
+	}
+
+	return newBlock
 }
 
 // Iterator ...
@@ -203,8 +244,40 @@ func NewBlockchain() *Blockchain {
 }
 
 func (bc *Blockchain) FindUTXO() map[string]TXOutputs {
+	UTXO := make(map[string]TXOutputs)
+	spentTXOs := make(map[string][]int)
+	bci := bc.Iterator()
+	for {
+		block := bci.Next()
+		for _, tx := range block.GetTransactions() {
+			txID := hex.EncodeToString(tx.ID)
+		Outputs:
+			for outIdx, out := range tx.Vout {
+				if spentTXOs[txID] != nil {
+					for _, spentOutIdx := range spentTXOs[txID] {
+						if spentOutIdx == outIdx {
+							continue Outputs
+						}
+					}
+				}
+				outs := UTXO[txID]
+				outs.Outputs = append(outs.Outputs, out)
+				UTXO[txID] = outs
+			}
 
-	return nil
+			if tx.IsCoinBase() == false {
+				for _, in := range tx.Vin {
+					inTxID := hex.EncodeToString(in.Txid)
+					spentTXOs[inTxID] = append(spentTXOs[inTxID], in.Vout)
+				}
+			}
+		}
+		if block.GetPrevhash() == [32]byte{} {
+			break
+		}
+	}
+
+	return UTXO
 }
 
 func (bc *Blockchain) Close() error {

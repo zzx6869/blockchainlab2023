@@ -33,7 +33,39 @@ func NewCoinbaseTx(toAddr []byte, data []byte) *Transaction {
 
 // NewUTXOTransaction creates a new transaction
 func NewUTXOTransaction(from, to []byte, amount int, UTXOSet *UTXOSet) *Transaction {
-	return nil
+	var inputs []TXInput
+	var outputs []TXOutput
+
+	wallets, err := NewWallets()
+	if err != nil {
+		log.Panic(err)
+	}
+	_wallet := wallets.GetWallet(from)
+	pubKeyHash := HashPublicKey(_wallet.PublicKey)
+	acc, validOutputs := UTXOSet.FindUnspentOutputs(pubKeyHash, amount)
+	if acc < amount {
+		log.Panic("error: not enough funds")
+	}
+
+	for txid, outs := range validOutputs {
+		txID, err := hex.DecodeString(txid)
+		if err != nil {
+			log.Panic(err)
+		}
+		for _, out := range outs {
+			input := TXInput{txID, out, nil, _wallet.PublicKey}
+			inputs = append(inputs, input)
+		}
+	}
+	outputs = append(outputs, *NewTXOutput(amount, to))
+	if acc > amount {
+		outputs = append(outputs, *NewTXOutput(acc-amount, from))
+	}
+	tx := Transaction{nil, inputs, outputs}
+	tx.SetID()
+	UTXOSet.Blockchain.SignTransaction(&tx, _wallet.PrivateKey)
+	return &tx
+
 }
 
 func (t *Transaction) IsCoinBase() bool {
